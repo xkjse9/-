@@ -1,5 +1,5 @@
 import discord
-from discord.ext import commands
+from discord.ext import commands, tasks
 from discord import app_commands
 import json
 import os
@@ -7,18 +7,20 @@ import traceback
 import logging
 import datetime
 from datetime import timezone, timedelta
+from flask import Flask
+import threading
+import requests
 
 # ====== 基本設定 ======
 logging.basicConfig(level=logging.INFO)
 
-# 從 Render 環境變數讀取 Token
 TOKEN = os.environ.get("DISCORD_TOKEN")
 REVIEW_CHANNEL_FILE = "review_channel.json"
 
 if not TOKEN:
     raise ValueError("[ERROR] 找不到 DISCORD_TOKEN，請在 Render 環境變數中設定。")
 
-# intents 設定
+# ====== Discord Bot ======
 intents = discord.Intents.default()
 intents.message_content = True
 intents.guilds = True
@@ -143,7 +145,6 @@ class ReviewModal(discord.ui.Modal, title="提交評價"):
             traceback.print_exc()
             await interaction.response.send_message("❌ 評價提交失敗，請稍後再試。", ephemeral=True)
 
-
 # ====== 設定評價頻道 ======
 @bot.tree.command(name="setreviewchannel", description="設定評價發送頻道（管理員限定）")
 @app_commands.checks.has_permissions(administrator=True)
@@ -163,7 +164,6 @@ async def setreviewchannel(interaction: discord.Interaction, channel: discord.Te
     except Exception:
         traceback.print_exc()
         await interaction.followup.send("❌ 設定頻道失敗，請稍後再試。", ephemeral=True)
-
 
 # ====== 叫出評價介面 /reviews @user ======
 @bot.tree.command(name="reviews", description="叫出評價介面（選擇一個人來填寫）")
@@ -201,7 +201,33 @@ async def reviews(interaction: discord.Interaction, user: discord.User):
         traceback.print_exc()
         await interaction.response.send_message("❌ 無法顯示評價介面。", ephemeral=True)
 
+# ====== Minimal Web Server (Render Free Web Service) ======
+app = Flask("")
 
-# ====== 啟動 Bot ======
+@app.route("/")
+def home():
+    return "Bot is running!"
+
+def run_web():
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host="0.0.0.0", port=port)
+
+# ====== 自動 ping Web 伺服器保持活躍 ======
+@tasks.loop(minutes=5)
+async def keep_alive():
+    try:
+        url = os.environ.get("RENDER_EXTERNAL_URL")  # Render 提供的外部 URL
+        if url:
+            requests.get(url)
+            print("[INFO] Ping Render Web Server to keep alive.")
+    except Exception:
+        pass
+
+@bot.event
+async def on_connect():
+    keep_alive.start()
+
+# ====== 啟動 Bot 與 Web Server ======
 if __name__ == "__main__":
+    threading.Thread(target=run_web).start()
     bot.run(TOKEN)
