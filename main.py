@@ -7,12 +7,11 @@ import traceback
 import logging
 import datetime
 from datetime import timezone, timedelta
-from keep_alive import keep_alive
 
 # ====== 基本設定 ======
 logging.basicConfig(level=logging.INFO)
 
-# 直接從 Render 環境變數讀取
+# 從 Render 環境變數讀取 Token
 TOKEN = os.environ.get("DISCORD_TOKEN")
 REVIEW_CHANNEL_FILE = "review_channel.json"
 
@@ -140,47 +139,9 @@ class ReviewModal(discord.ui.Modal, title="提交評價"):
                 except Exception:
                     pass
 
-            await interaction.channel.send("## 💕感謝您的評價！您的回饋對我們非常重要～ 歡迎再次回來逛逛！")
-
         except Exception:
             traceback.print_exc()
             await interaction.response.send_message("❌ 評價提交失敗，請稍後再試。", ephemeral=True)
-
-
-class ReviewButton(discord.ui.View):
-    def __init__(self, target_user: discord.User, messages_to_delete: list):
-        super().__init__(timeout=None)
-        self.target_user = target_user
-        self.messages_to_delete = messages_to_delete
-
-    @discord.ui.button(label="填寫評價", style=discord.ButtonStyle.success)
-    async def leave_review(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if interaction.user.id != self.target_user.id:
-            await interaction.response.send_message("❌ 你不是評價對象，無法填寫。", ephemeral=True)
-            return
-        await interaction.response.send_modal(ReviewModal(self.target_user, self.messages_to_delete))
-
-
-class UserSelect(discord.ui.View):
-    def __init__(self):
-        super().__init__(timeout=None)
-
-    @discord.ui.select(cls=discord.ui.UserSelect, placeholder="選擇要被評價的使用者")
-    async def select_user(self, interaction: discord.Interaction, select: discord.ui.UserSelect):
-        target_user = select.values[0]
-        messages_to_delete = []
-        msg1 = await interaction.channel.send(f"{target_user.mention} 麻煩幫我點擊下方按鈕來填寫評價~")
-        messages_to_delete.append(msg1)
-
-        view = ReviewButton(target_user, messages_to_delete)
-        embed = discord.Embed(
-            title="📝 評價系統",
-            description=f"只有 {target_user.mention} 可以點擊下方按鈕來填寫評價。",
-            color=discord.Color.purple(),
-            timestamp=datetime.datetime.now(timezone(timedelta(hours=8)))
-        )
-        msg2 = await interaction.channel.send(embed=embed, view=view)
-        messages_to_delete.append(msg2)
 
 
 # ====== 設定評價頻道 ======
@@ -204,12 +165,38 @@ async def setreviewchannel(interaction: discord.Interaction, channel: discord.Te
         await interaction.followup.send("❌ 設定頻道失敗，請稍後再試。", ephemeral=True)
 
 
-# ====== 叫出評價介面 ======
+# ====== 叫出評價介面 /reviews @user ======
 @bot.tree.command(name="reviews", description="叫出評價介面（選擇一個人來填寫）")
-async def reviews(interaction: discord.Interaction):
+@app_commands.describe(user="選擇要被評價的使用者")
+async def reviews(interaction: discord.Interaction, user: discord.User):
     try:
-        view = UserSelect()
-        await interaction.response.send_message("請選擇要被評價的使用者：", view=view, ephemeral=True)
+        messages_to_delete = []
+        msg1 = await interaction.channel.send(f"{user.mention} 麻煩幫我點擊下方按鈕來填寫評價~")
+        messages_to_delete.append(msg1)
+
+        view = discord.ui.View(timeout=None)
+        button = discord.ui.Button(label="填寫評價", style=discord.ButtonStyle.success)
+
+        async def button_callback(btn_interaction: discord.Interaction):
+            if btn_interaction.user.id != user.id:
+                await btn_interaction.response.send_message("❌ 你不是評價對象，無法填寫。", ephemeral=True)
+                return
+            await btn_interaction.response.send_modal(ReviewModal(user, messages_to_delete))
+
+        button.callback = button_callback
+        view.add_item(button)
+
+        embed = discord.Embed(
+            title="📝 評價系統",
+            description=f"只有 {user.mention} 可以點擊下方按鈕來填寫評價。",
+            color=discord.Color.purple(),
+            timestamp=datetime.datetime.now(timezone(timedelta(hours=8)))
+        )
+        msg2 = await interaction.channel.send(embed=embed, view=view)
+        messages_to_delete.append(msg2)
+
+        await interaction.response.send_message("✅ 已送出評價介面。", ephemeral=True)
+
     except Exception:
         traceback.print_exc()
         await interaction.response.send_message("❌ 無法顯示評價介面。", ephemeral=True)
@@ -217,5 +204,4 @@ async def reviews(interaction: discord.Interaction):
 
 # ====== 啟動 Bot ======
 if __name__ == "__main__":
-    keep_alive()  # 啟動 Flask server
     bot.run(TOKEN)
