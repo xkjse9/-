@@ -62,94 +62,150 @@ async def on_ready():
         traceback.print_exc()
 
 # ====== 評價系統 ======
-class ReviewModal(discord.ui.Modal, title="提交評價"):
-    def __init__(self, target_user: discord.User, messages_to_delete: list):
-        super().__init__()
-        self.target_user = target_user
-        self.messages_to_delete = messages_to_delete
+            class ReviewModal(discord.ui.Modal, title="提交評價"):
 
-        self.product = discord.ui.TextInput(
-            label="購買商品名稱",
-            style=discord.TextStyle.short,
-            placeholder="請輸入商品名稱",
-            max_length=100
-        )
-        self.rating = discord.ui.TextInput(
-            label="評分（1-5）",
-            style=discord.TextStyle.short,
-            placeholder="請輸入 1 到 5",
-            max_length=1
-        )
-        self.feedback = discord.ui.TextInput(
-            label="評價內容",
-            style=discord.TextStyle.paragraph,
-            placeholder="請輸入你的使用心得或建議",
-            max_length=2000
-        )
+                def __init__(self, target_user: discord.User, messages_to_delete: list):
+                    super().__init__()
+                    self.target_user = target_user
+                    self.messages_to_delete = messages_to_delete
 
-        self.add_item(self.product)
-        self.add_item(self.rating)
-        self.add_item(self.feedback)
+                    self.product = discord.ui.TextInput(label="購買商品名稱",
+                                                        style=discord.TextStyle.short,
+                                                        placeholder="請輸入商品名稱",
+                                                        max_length=100)
+                    self.rating = discord.ui.TextInput(label="評分（1-5）",
+                                                       style=discord.TextStyle.short,
+                                                       placeholder="請輸入 1 到 5",
+                                                       max_length=1)
+                    self.feedback = discord.ui.TextInput(label="評價內容",
+                                                         style=discord.TextStyle.paragraph,
+                                                         placeholder="請輸入你的使用心得或建議",
+                                                         max_length=2000)
 
-    async def on_submit(self, interaction: discord.Interaction):
-        if interaction.user.id != self.target_user.id:
-            await interaction.response.send_message("❌ 你不是評價對象，無法提交。", ephemeral=True)
-            return
+                    self.add_item(self.product)
+                    self.add_item(self.rating)
+                    self.add_item(self.feedback)
 
-        try:
-            guild_id = str(interaction.guild.id)
-            channel_id = review_channels.get(guild_id)
-            if not channel_id:
-                await interaction.response.send_message("❌ 尚未設定評價頻道。", ephemeral=True)
-                return
+                async def on_submit(self, interaction: discord.Interaction):
+                    if interaction.user.id != self.target_user.id:
+                        await interaction.response.send_message("❌ 你不是評價對象，無法提交。",
+                                                                ephemeral=True)
+                        return
 
-            channel = bot.get_channel(channel_id)
-            if channel is None:
-                await interaction.response.send_message("❌ 找不到評價頻道。", ephemeral=True)
-                return
+                    try:
+                        guild_id = str(interaction.guild.id)
+                        channel_id = review_channels.get(guild_id)
+                        if not channel_id:
+                            await interaction.response.send_message("❌ 尚未設定評價頻道。",
+                                                                    ephemeral=True)
+                            return
 
-            try:
-                rating_val = int(self.rating.value.strip())
-            except ValueError:
-                await interaction.response.send_message("❌ 評分格式錯誤，請輸入 1 到 5 的整數。", ephemeral=True)
-                return
+                        channel = bot.get_channel(channel_id)
+                        if channel is None:
+                            await interaction.response.send_message("❌ 找不到評價頻道。",
+                                                                    ephemeral=True)
+                            return
 
-            if rating_val < 1 or rating_val > 5:
-                await interaction.response.send_message("❌ 評分需為 1 到 5。", ephemeral=True)
-                return
+                        try:
+                            rating_val = int(self.rating.value.strip())
+                        except ValueError:
+                            await interaction.response.send_message(
+                                "❌ 評分格式錯誤，請輸入 1 到 5 的整數。", ephemeral=True)
+                            return
 
-            star_emoji = "⭐"
-            empty_star_emoji = "☆"
-            stars = star_emoji * rating_val + empty_star_emoji * (5 - rating_val)
+                        if rating_val < 1 or rating_val > 5:
+                            await interaction.response.send_message("❌ 評分需為 1 到 5。",
+                                                                    ephemeral=True)
+                            return
 
-            now = datetime.datetime.now(timezone(timedelta(hours=8)))
-            time_str = now.strftime("%Y-%m-%d %H:%M:%S")
+                        star_emoji = "⭐"
+                        empty_star_emoji = "☆"
+                        stars = star_emoji * rating_val + empty_star_emoji * (5 -
+                                                                              rating_val)
 
-            embed = discord.Embed(
-                title=f"📝 新的商品評價 - {self.product.value}",
-                description=f"來自：{interaction.user.mention}",
-                color=discord.Color.blurple(),
-                timestamp=now
-            )
-            embed.add_field(name="商品", value=self.product.value, inline=False)
-            embed.add_field(name="評分", value=f"{stars} (`{rating_val}/5`)", inline=False)
-            embed.add_field(name="評價內容", value=self.feedback.value or "（使用者未留下內容）", inline=False)
-            embed.add_field(name="時間", value=time_str, inline=False)
-            embed.set_author(name=interaction.user.display_name, icon_url=interaction.user.display_avatar.url)
-            embed.set_footer(text="感謝您的回饋！")
+                        now = datetime.datetime.now(timezone(timedelta(hours=8)))
+                        time_str = now.strftime("%Y-%m-%d %H:%M:%S")
 
-            await channel.send(embed=embed)
-            await interaction.response.send_message(f"✅ 你的評價已提交到 {channel.mention}", ephemeral=True)
+                        embed = discord.Embed(title=f"📝 新的商品評價 - {self.product.value}",
+                                              description=f"來自：{interaction.user.mention}",
+                                              color=discord.Color.blurple(),
+                                              timestamp=now)
+                        embed.add_field(name="商品", value=self.product.value, inline=False)
+                        embed.add_field(name="評分",
+                                        value=f"{stars} (`{rating_val}/5`)",
+                                        inline=False)
+                        embed.add_field(name="評價內容",
+                                        value=self.feedback.value or "（使用者未留下內容）",
+                                        inline=False)
+                        embed.add_field(name="時間", value=time_str, inline=False)
+                        embed.set_author(name=interaction.user.display_name,
+                                         icon_url=interaction.user.display_avatar.url)
+                        embed.set_footer(text="感謝您的回饋！")
 
-            for msg in self.messages_to_delete:
-                try:
-                    await msg.delete()
-                except Exception:
-                    pass
+                        # 發送評價 embed
+                        await channel.send(embed=embed)
 
-        except Exception:
-            traceback.print_exc()
-            await interaction.response.send_message("❌ 評價提交失敗，請稍後再試。", ephemeral=True)
+                        # ephemeral 提示提交成功
+                        await interaction.response.send_message(
+                            f"✅ 你的評價已提交到 {channel.mention}", ephemeral=True)
+
+                        # 刪除原本的召喚訊息
+                        for msg in self.messages_to_delete:
+                            try:
+                                await msg.delete()
+                            except Exception:
+                                pass
+
+                        # 發送感謝訊息到原頻道
+                        await interaction.channel.send("## 💕感謝您的評價！您的回饋對我們非常重要～ 歡迎再次回來逛逛！")
+
+                    except Exception:
+                        traceback.print_exc()
+                        await interaction.response.send_message("❌ 評價提交失敗，請稍後再試。",
+                                                                ephemeral=True)
+
+
+            class ReviewButton(discord.ui.View):
+
+                def __init__(self, target_user: discord.User, messages_to_delete: list):
+                    super().__init__(timeout=None)
+                    self.target_user = target_user
+                    self.messages_to_delete = messages_to_delete
+
+                @discord.ui.button(label="填寫評價", style=discord.ButtonStyle.success)
+                async def leave_review(self, interaction: discord.Interaction,
+                                       button: discord.ui.Button):
+                    if interaction.user.id != self.target_user.id:
+                        await interaction.response.send_message("❌ 你不是評價對象，無法填寫。",
+                                                                ephemeral=True)
+                        return
+                    await interaction.response.send_modal(
+                        ReviewModal(self.target_user, self.messages_to_delete))
+
+
+            class UserSelect(discord.ui.View):
+
+                def __init__(self):
+                    super().__init__(timeout=None)
+
+                @discord.ui.select(cls=discord.ui.UserSelect, placeholder="選擇要被評價的使用者")
+                async def select_user(self, interaction: discord.Interaction,
+                                      select: discord.ui.UserSelect):
+                    target_user = select.values[0]
+
+                    messages_to_delete = []
+                    msg1 = await interaction.channel.send(
+                        f"{target_user.mention} 麻煩幫我點擊下方按鈕來填寫評價~")
+                    messages_to_delete.append(msg1)
+
+                    view = ReviewButton(target_user, messages_to_delete)
+                    embed = discord.Embed(
+                        title="📝 評價系統",
+                        description=f"只有 {target_user.mention} 可以點擊下方按鈕來填寫評價。",
+                        color=discord.Color.purple(),
+                        timestamp=datetime.datetime.now(timezone(timedelta(hours=8))))
+                    msg2 = await interaction.channel.send(embed=embed, view=view)
+                    messages_to_delete.append(msg2)
 
 # ====== 設定評價頻道 ======
 @bot.tree.command(name="setreviewchannel", description="設定評價發送頻道（管理員限定）")
@@ -202,14 +258,14 @@ async def reviews(interaction: discord.Interaction, user: discord.User):
             timestamp=datetime.datetime.now(timezone(timedelta(hours=8)))
         )
         msg2 = await interaction.channel.send(embed=embed, view=view)
-        messages_to_delete.append(msg2)
+        message    try:
+     s_to_delete.append(msg2)
 
         await interaction.followup.send("✅ 已送出評價介面。", ephemeral=True)
 
     except Exception:
         traceback.print_exc()
-        try:
-            await interaction.followup.send("❌ 無法顯示評價介面。", ephemeral=True)
+           await interaction.followup.send("❌ 無法顯示評價介面。", ephemeral=True)
         except:
             pass
 
@@ -300,95 +356,6 @@ async def on_ready():
     except Exception:
         traceback.print_exc()
 
-# ====== 評價系統 ======
-class ReviewModal(discord.ui.Modal, title="提交評價"):
-    def __init__(self, target_user: discord.User, messages_to_delete: list):
-        super().__init__()
-        self.target_user = target_user
-        self.messages_to_delete = messages_to_delete
-
-        self.product = discord.ui.TextInput(
-            label="購買商品名稱",
-            style=discord.TextStyle.short,
-            placeholder="請輸入商品名稱",
-            max_length=100
-        )
-        self.rating = discord.ui.TextInput(
-            label="評分（1-5）",
-            style=discord.TextStyle.short,
-            placeholder="請輸入 1 到 5",
-            max_length=1
-        )
-        self.feedback = discord.ui.TextInput(
-            label="評價內容",
-            style=discord.TextStyle.paragraph,
-            placeholder="請輸入你的使用心得或建議",
-            max_length=2000
-        )
-
-        self.add_item(self.product)
-        self.add_item(self.rating)
-        self.add_item(self.feedback)
-
-    async def on_submit(self, interaction: discord.Interaction):
-        if interaction.user.id != self.target_user.id:
-            await interaction.response.send_message("❌ 你不是評價對象，無法提交。", ephemeral=True)
-            return
-
-        try:
-            guild_id = str(interaction.guild.id)
-            channel_id = review_channels.get(guild_id)
-            if not channel_id:
-                await interaction.response.send_message("❌ 尚未設定評價頻道。", ephemeral=True)
-                return
-
-            channel = bot.get_channel(channel_id)
-            if channel is None:
-                await interaction.response.send_message("❌ 找不到評價頻道。", ephemeral=True)
-                return
-
-            try:
-                rating_val = int(self.rating.value.strip())
-            except ValueError:
-                await interaction.response.send_message("❌ 評分格式錯誤，請輸入 1 到 5 的整數。", ephemeral=True)
-                return
-
-            if rating_val < 1 or rating_val > 5:
-                await interaction.response.send_message("❌ 評分需為 1 到 5。", ephemeral=True)
-                return
-
-            star_emoji = "⭐"
-            empty_star_emoji = "☆"
-            stars = star_emoji * rating_val + empty_star_emoji * (5 - rating_val)
-
-            now = datetime.datetime.now(timezone(timedelta(hours=8)))
-            time_str = now.strftime("%Y-%m-%d %H:%M:%S")
-
-            embed = discord.Embed(
-                title=f"📝 新的商品評價 - {self.product.value}",
-                description=f"來自：{interaction.user.mention}",
-                color=discord.Color.blurple(),
-                timestamp=now
-            )
-            embed.add_field(name="商品", value=self.product.value, inline=False)
-            embed.add_field(name="評分", value=f"{stars} (`{rating_val}/5`)", inline=False)
-            embed.add_field(name="評價內容", value=self.feedback.value or "（使用者未留下內容）", inline=False)
-            embed.add_field(name="時間", value=time_str, inline=False)
-            embed.set_author(name=interaction.user.display_name, icon_url=interaction.user.display_avatar.url)
-            embed.set_footer(text="感謝您的回饋！")
-
-            await channel.send(embed=embed)
-            await interaction.response.send_message(f"✅ 你的評價已提交到 {channel.mention}", ephemeral=True)
-
-            for msg in self.messages_to_delete:
-                try:
-                    await msg.delete()
-                except Exception:
-                    pass
-
-        except Exception:
-            traceback.print_exc()
-            await interaction.response.send_message("❌ 評價提交失敗，請稍後再試。", ephemeral=True)
 
 # ====== 設定評價頻道 ======
 @bot.tree.command(name="setreviewchannel", description="設定評價發送頻道（管理員限定）")
@@ -415,36 +382,42 @@ async def setreviewchannel(interaction: discord.Interaction, channel: discord.Te
 @app_commands.describe(user="選擇要被評價的使用者")
 async def reviews(interaction: discord.Interaction, user: discord.User):
     try:
-        messages_to_delete = []
-        msg1 = await interaction.channel.send(f"{user.mention} 麻煩幫我點擊下方按鈕來填寫評價~")
-        messages_to_delete.append(msg1)
+        # ✅ 先 defer
+        await interaction.response.defer(ephemeral=True)
 
+        # 建立按鈕
         view = discord.ui.View(timeout=None)
         button = discord.ui.Button(label="填寫評價", style=discord.ButtonStyle.success)
 
         async def button_callback(btn_interaction: discord.Interaction):
             if btn_interaction.user.id != user.id:
-                await btn_interaction.response.send_message("❌ 你不是評價對象，無法填寫。", ephemeral=True)
+                await btn_interaction.response.send_message(
+                    "❌ 你不是評價對象，無法填寫。", ephemeral=True
+                )
                 return
-            await btn_interaction.response.send_modal(ReviewModal(user, messages_to_delete))
+            await btn_interaction.response.send_modal(ReviewModal(user, []))  # messages_to_delete 可以空
 
         button.callback = button_callback
         view.add_item(button)
 
+        # 建立 embed
         embed = discord.Embed(
             title="📝 評價系統",
             description=f"只有 {user.mention} 可以點擊下方按鈕來填寫評價。",
             color=discord.Color.purple(),
             timestamp=datetime.datetime.now(timezone(timedelta(hours=8)))
         )
-        msg2 = await interaction.channel.send(embed=embed, view=view)
-        messages_to_delete.append(msg2)
 
-        await interaction.response.send_message("✅ 已送出評價介面。", ephemeral=True)
+        # ✅ 發送訊息給頻道，帶 embed + 按鈕
+        await interaction.followup.send(embed=embed, view=view, ephemeral=False)
 
     except Exception:
         traceback.print_exc()
-        await interaction.response.send_message("❌ 無法顯示評價介面。", ephemeral=True)
+        try:
+            await interaction.followup.send("❌ 無法顯示評價介面。", ephemeral=True)
+        except:
+            pass
+
 
 # ====== Minimal Web Server (Render Free Web Service) ======
 app = Flask("")
@@ -476,3 +449,4 @@ async def on_connect():
 if __name__ == "__main__":
     threading.Thread(target=run_web).start()
     bot.run(TOKEN)
+0
