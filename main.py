@@ -46,12 +46,18 @@ def save_review_channel(guild_id, channel_id):
         traceback.print_exc()
 
 # ====== Bot 事件 ======
+TEST_GUILD_ID = int(os.environ.get("TEST_GUILD_ID", 0))  # 測試伺服器ID，建議填寫
+
 @bot.event
 async def on_ready():
     try:
-        for guild in bot.guilds:
+        if TEST_GUILD_ID:
+            guild = discord.Object(id=TEST_GUILD_ID)
             await bot.tree.sync(guild=guild)
-        print(f"[INFO] 已登入為 {bot.user} 並同步指令到所有伺服器。")
+            print(f"[INFO] 已登入 {bot.user}，指令同步到測試伺服器 {TEST_GUILD_ID}")
+        else:
+            await bot.tree.sync()
+            print(f"[INFO] 已登入 {bot.user}，全域指令同步完成")
     except Exception:
         traceback.print_exc()
 
@@ -132,18 +138,36 @@ class ReviewModal(discord.ui.Modal, title="提交評價"):
             embed.set_author(name=interaction.user.display_name, icon_url=interaction.user.display_avatar.url)
             embed.set_footer(text="感謝您的回饋！")
 
+            # 發送評價 embed
             await channel.send(embed=embed)
             await interaction.response.send_message(f"✅ 你的評價已提交到 {channel.mention}", ephemeral=True)
 
+            # 刪除原本的召喚訊息
             for msg in self.messages_to_delete:
                 try:
                     await msg.delete()
                 except Exception:
                     pass
 
+            await interaction.channel.send("## 💕感謝您的評價！您的回饋對我們非常重要～ 歡迎再次回來逛逛！")
+
         except Exception:
             traceback.print_exc()
             await interaction.response.send_message("❌ 評價提交失敗，請稍後再試。", ephemeral=True)
+
+# ====== 評價按鈕 ======
+class ReviewButton(discord.ui.View):
+    def __init__(self, target_user: discord.User, messages_to_delete: list):
+        super().__init__(timeout=None)
+        self.target_user = target_user
+        self.messages_to_delete = messages_to_delete
+
+    @discord.ui.button(label="填寫評價", style=discord.ButtonStyle.success)
+    async def leave_review(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user.id != self.target_user.id:
+            await interaction.response.send_message("❌ 你不是評價對象，無法填寫。", ephemeral=True)
+            return
+        await interaction.response.send_modal(ReviewModal(self.target_user, self.messages_to_delete))
 
 # ====== 設定評價頻道 ======
 @bot.tree.command(name="setreviewchannel", description="設定評價發送頻道（管理員限定）")
@@ -170,7 +194,13 @@ async def setreviewchannel(interaction: discord.Interaction, channel: discord.Te
 @app_commands.describe(user="選擇要被評價的使用者")
 async def reviews(interaction: discord.Interaction, user: discord.User):
     try:
-        await interaction.response.defer(ephemeral=True)
+        # 普通 defer，不要 ephemeral
+        await interaction.response.defer()
+
+        messages_to_delete = []
+
+        msg1 = await interaction.channel.send(f"{user.mention} 麻煩幫我點擊下方按鈕來填寫評價~")
+        messages_to_delete.append(msg1)
 
         view = discord.ui.View(timeout=180)
         button = discord.ui.Button(label="填寫評價", style=discord.ButtonStyle.success)
@@ -179,7 +209,7 @@ async def reviews(interaction: discord.Interaction, user: discord.User):
             if btn_interaction.user.id != user.id:
                 await btn_interaction.response.send_message("❌ 你不是評價對象，無法填寫。", ephemeral=True)
                 return
-            await btn_interaction.response.send_modal(ReviewModal(user, []))
+            await btn_interaction.response.send_modal(ReviewModal(user, messages_to_delete))
 
         button.callback = button_callback
         view.add_item(button)
@@ -190,8 +220,11 @@ async def reviews(interaction: discord.Interaction, user: discord.User):
             color=discord.Color.purple(),
             timestamp=datetime.datetime.now(timezone(timedelta(hours=8)))
         )
+        msg2 = await interaction.channel.send(embed=embed, view=view)
+        messages_to_delete.append(msg2)
 
-        await interaction.followup.send(embed=embed, view=view, ephemeral=False)
+        # 發送 ephemeral 提示給觸發者
+        await interaction.followup.send("✅ 已送出評價介面。", ephemeral=True)
 
     except Exception:
         traceback.print_exc()
@@ -200,7 +233,8 @@ async def reviews(interaction: discord.Interaction, user: discord.User):
         except:
             pass
 
-# ====== Minimal Web Server (Render Free Web Service) ======
+
+# ====== Minimal Web Server ======
 app = Flask("")
 
 @app.route("/")
@@ -211,7 +245,7 @@ def run_web():
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
 
-# ====== 自動 ping Web 伺服器保持活躍 ======
+# ====== 自動 ping Web 伺服器 ======
 @tasks.loop(minutes=5)
 async def keep_alive():
     try:
