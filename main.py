@@ -72,7 +72,7 @@ class ReviewModal(discord.ui.Modal, title="提交評價"):
             label="購買商品名稱",
             style=discord.TextStyle.short,
             placeholder="請輸入商品名稱",
-            max_length=100
+            max_length=50
         )
         self.rating = discord.ui.TextInput(
             label="評分（1-5）",
@@ -81,10 +81,10 @@ class ReviewModal(discord.ui.Modal, title="提交評價"):
             max_length=1
         )
         self.feedback = discord.ui.TextInput(
-            label="評價內容",
+            label="評語",
             style=discord.TextStyle.paragraph,
-            placeholder="請輸入你的使用心得或建議",
-            max_length=2000
+            placeholder="寫點評語吧...",
+            max_length=50
         )
 
         self.add_item(self.product)
