@@ -46,7 +46,7 @@ def save_review_channel(guild_id, channel_id):
         traceback.print_exc()
 
 # ====== Bot 事件 ======
-TEST_GUILD_ID = int(os.environ.get("TEST_GUILD_ID", 0))
+TEST_GUILD_ID = int(os.environ.get("TEST_GUILD_ID", 0))  # 測試伺服器ID，建議填寫
 
 @bot.event
 async def on_ready():
@@ -84,7 +84,7 @@ class ReviewModal(discord.ui.Modal, title="提交評價"):
             label="評語",
             style=discord.TextStyle.paragraph,
             placeholder="寫點評語吧...",
-            max_length=100
+            max_length=50
         )
 
         self.add_item(self.product)
@@ -138,20 +138,36 @@ class ReviewModal(discord.ui.Modal, title="提交評價"):
             embed.set_author(name=interaction.user.display_name, icon_url=interaction.user.display_avatar.url)
             embed.set_footer(text="感謝您的回饋！")
 
+            # 發送評價 embed
             await channel.send(embed=embed)
             await interaction.response.send_message(f"✅ 你的評價已提交到 {channel.mention}", ephemeral=True)
 
+            # 刪除原本的召喚訊息
             for msg in self.messages_to_delete:
                 try:
                     await msg.delete()
                 except Exception:
                     pass
 
-            await interaction.channel.send("## 💕 感謝您的評價！您的回饋對我們非常重要～ 歡迎再次回來逛逛！")
+            await interaction.channel.send("## 💕感謝您的評價！您的回饋對我們非常重要～ 歡迎再次回來逛逛！")
 
         except Exception:
             traceback.print_exc()
             await interaction.response.send_message("❌ 評價提交失敗，請稍後再試。", ephemeral=True)
+
+# ====== 評價按鈕 ======
+class ReviewButton(discord.ui.View):
+    def __init__(self, target_user: discord.User, messages_to_delete: list):
+        super().__init__(timeout=None)
+        self.target_user = target_user
+        self.messages_to_delete = messages_to_delete
+
+    @discord.ui.button(label="填寫評價", style=discord.ButtonStyle.success)
+    async def leave_review(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user.id != self.target_user.id:
+            await interaction.response.send_message("❌ 你不是評價對象，無法填寫。", ephemeral=True)
+            return
+        await interaction.response.send_modal(ReviewModal(self.target_user, self.messages_to_delete))
 
 # ====== 設定評價頻道 ======
 @bot.tree.command(name="setreviewchannel", description="設定評價發送頻道（管理員限定）")
@@ -173,12 +189,14 @@ async def setreviewchannel(interaction: discord.Interaction, channel: discord.Te
         traceback.print_exc()
         await interaction.followup.send("❌ 設定頻道失敗，請稍後再試。", ephemeral=True)
 
-# ====== 叫出評價介面 ======
+# ====== 叫出評價介面 /reviews @user ======
 @bot.tree.command(name="reviews", description="叫出評價介面（選擇一個人來填寫）")
 @app_commands.describe(user="選擇要被評價的使用者")
 async def reviews(interaction: discord.Interaction, user: discord.User):
     try:
+        # 普通 defer，不要 ephemeral
         await interaction.response.defer()
+
         messages_to_delete = []
 
         msg1 = await interaction.channel.send(f"{user.mention} 麻煩幫我點擊下方按鈕來填寫評價~")
@@ -202,15 +220,21 @@ async def reviews(interaction: discord.Interaction, user: discord.User):
             color=discord.Color.purple(),
             timestamp=datetime.datetime.now(timezone(timedelta(hours=8)))
         )
-
         msg2 = await interaction.channel.send(embed=embed, view=view)
         messages_to_delete.append(msg2)
 
+        # 發送 ephemeral 提示給觸發者
+        await interaction.followup.send("✅ 已送出評價介面。", ephemeral=True)
+
     except Exception:
         traceback.print_exc()
-        await interaction.followup.send("❌ 發送評價介面失敗。", ephemeral=True)
+        try:
+            await interaction.followup.send("❌ 無法顯示評價介面。", ephemeral=True)
+        except:
+            pass
 
-# ====== Minimal Web Server + Keep Alive ======
+
+# ====== Minimal Web Server ======
 app = Flask("")
 
 @app.route("/")
@@ -221,22 +245,22 @@ def run_web():
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
 
+# ====== 自動 ping Web 伺服器 ======
 @tasks.loop(minutes=5)
 async def keep_alive():
-    url = os.environ.get("RENDER_EXTERNAL_URL")
-    if url:
-        try:
-            requests.get(url, timeout=5)
+    try:
+        url = os.environ.get("RENDER_EXTERNAL_URL")
+        if url:
+            requests.get(url)
             print("[INFO] Ping Render Web Server to keep alive.")
-        except Exception:
-            pass
+    except Exception:
+        pass
 
 @bot.event
 async def on_connect():
-    if not keep_alive.is_running():
-        keep_alive.start()
+    keep_alive.start()
 
 # ====== 啟動 Bot 與 Web Server ======
 if __name__ == "__main__":
-    threading.Thread(target=run_web, daemon=True).start()
+    threading.Thread(target=run_web).start()
     bot.run(TOKEN)
