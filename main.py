@@ -210,7 +210,7 @@ async def reviews(interaction: discord.Interaction, user: discord.User):
         traceback.print_exc()
         await interaction.followup.send("❌ 發送評價介面失敗。", ephemeral=True)
 
-# ====== Minimal Web Server ======
+# ====== Minimal Web Server + Keep Alive ======
 app = Flask("")
 
 @app.route("/")
@@ -221,22 +221,22 @@ def run_web():
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
 
-# ====== 自動 ping Web 伺服器 ======
 @tasks.loop(minutes=5)
 async def keep_alive():
-    try:
-        url = os.environ.get("RENDER_EXTERNAL_URL")
-        if url:
-            requests.get(url)
+    url = os.environ.get("RENDER_EXTERNAL_URL")
+    if url:
+        try:
+            requests.get(url, timeout=5)
             print("[INFO] Ping Render Web Server to keep alive.")
-    except Exception:
-        pass
+        except Exception:
+            pass
 
 @bot.event
 async def on_connect():
-    keep_alive.start()
+    if not keep_alive.is_running():
+        keep_alive.start()
 
 # ====== 啟動 Bot 與 Web Server ======
 if __name__ == "__main__":
-    threading.Thread(target=run_web).start()
+    threading.Thread(target=run_web, daemon=True).start()
     bot.run(TOKEN)
