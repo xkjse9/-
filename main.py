@@ -84,7 +84,7 @@ class ReviewModal(discord.ui.Modal, title="提交評價"):
             label="評語",
             style=discord.TextStyle.paragraph,
             placeholder="寫點評語吧...",
-            max_length=50
+            max_length=100
         )
 
         self.add_item(self.product)
@@ -222,18 +222,6 @@ async def reviews(interaction: discord.Interaction, user: discord.User):
         )
         msg2 = await interaction.channel.send(embed=embed, view=view)
         messages_to_delete.append(msg2)
-
-        # 發送 ephemeral 提示給觸發者
-        await interaction.followup.send("✅ 已送出評價介面。", ephemeral=True)
-
-    except Exception:
-        traceback.print_exc()
-        try:
-            await interaction.followup.send("❌ 無法顯示評價介面。", ephemeral=True)
-        except:
-            pass
-
-
 # ====== Minimal Web Server ======
 app = Flask("")
 
